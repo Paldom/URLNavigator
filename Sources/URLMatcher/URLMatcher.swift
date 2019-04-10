@@ -46,20 +46,45 @@ open class URLMatcher {
   ///
   /// - returns: A `URLMatchComponents` struct that holds the URL pattern string, a dictionary of
   ///            the URL placeholder values.
-  open func match(_ url: URLConvertible, from candidates: [URLPattern]) -> URLMatchResult? {
-    let url = self.normalizeURL(url)
-    let scheme = url.urlValue?.scheme
-    let stringPathComponents = self.stringPathComponents(from :url)
-
-    for candidate in candidates {
-      guard scheme == candidate.urlValue?.scheme else { continue }
-      if let result = self.match(stringPathComponents, with: candidate) {
-        return result
-      }
+    open func match(_ url: URLConvertible, from candidates: [URLPattern]) -> URLMatchResult? {
+        let url = self.normalizeURL(url)
+        let scheme = url.urlValue?.scheme
+        let stringPathComponents = self.stringPathComponents(from :url)
+        
+        var results = [URLMatchResult]()
+        
+        for candidate in candidates {
+            guard scheme == candidate.urlValue?.scheme else { continue }
+            if let result = self.match(stringPathComponents, with: candidate) {
+                results.append(result)
+            }
+        }
+        
+        if results.count > 1 {
+            
+            let firstPlacholderClosure = { (urlPattern: URLPattern) -> Int in
+                var count = 0
+                for pathComponent in self.pathComponents(from: urlPattern) {
+                    switch pathComponent {
+                    case .plain(_):
+                        count += 1
+                    case .placeholder(_, _):
+                        return count
+                    }
+                }
+                return count
+            }
+            
+            return results
+                .sorted(by: { return firstPlacholderClosure($0.pattern) < firstPlacholderClosure($1.pattern) })
+                .last
+            
+        } else if results.count == 1 {
+            return results[0]
+        } else {
+            return nil
+        }
     }
-
-    return nil
-  }
 
   func match(_ stringPathComponents: [String], with candidate: URLPattern) -> URLMatchResult? {
     let normalizedCandidate = self.normalizeURL(candidate).urlStringValue
